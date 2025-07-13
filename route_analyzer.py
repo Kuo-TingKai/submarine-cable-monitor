@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-路由分析器
-分析网络路由、BGP信息和网络拓扑
+Route Analyzer
+Analyze network routes, BGP information and network topology
 """
 
 import asyncio
@@ -14,10 +14,11 @@ from dataclasses import dataclass
 from datetime import datetime
 import subprocess
 import re
+import platform
 
 @dataclass
 class RouteInfo:
-    """路由信息数据类"""
+    """Route information data class"""
     destination: str
     gateway: str
     interface: str
@@ -28,7 +29,7 @@ class RouteInfo:
 
 @dataclass
 class BGPInfo:
-    """BGP信息数据类"""
+    """BGP information data class"""
     asn: str
     prefix: str
     as_path: List[str]
@@ -39,59 +40,61 @@ class BGPInfo:
     community: Optional[List[str]] = None
 
 class RouteAnalyzer:
-    """路由分析器主类"""
+    """Main route analyzer class"""
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.session = None
         
     async def __aenter__(self):
-        """异步上下文管理器入口"""
+        """Async context manager entry"""
         self.session = aiohttp.ClientSession()
         return self
         
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """异步上下文管理器出口"""
+        """Async context manager exit"""
         if self.session:
             await self.session.close()
             
     def get_local_routes(self) -> List[RouteInfo]:
-        """获取本地路由表"""
+        """Get local routing table (auto-adapt for Linux/macOS)"""
         routes = []
-        
         try:
-            # 在Unix系统上使用route命令
-            result = subprocess.run(
-                ['route', '-n'], 
-                capture_output=True, 
-                text=True, 
-                check=True
-            )
-            
-            lines = result.stdout.strip().split('\n')
-            # 跳过标题行
-            for line in lines[2:]:
-                parts = line.split()
-                if len(parts) >= 4:
-                    routes.append(RouteInfo(
-                        destination=parts[0],
-                        gateway=parts[1],
-                        interface=parts[7] if len(parts) > 7 else '',
-                        metric=int(parts[4]) if len(parts) > 4 else 0
-                    ))
-                    
+            system = platform.system()
+            if system == 'Linux':
+                # Use route -n on Linux
+                result = subprocess.run(['route', '-n'], capture_output=True, text=True, check=True)
+                lines = result.stdout.strip().split('\n')
+                for line in lines[2:]:  # Skip header
+                    parts = line.split()
+                    if len(parts) >= 8:
+                        routes.append(RouteInfo(destination=parts[0], gateway=parts[1], iface=parts[-1]))
+            elif system == 'Darwin':
+                # Use netstat -rn on macOS
+                result = subprocess.run(['netstat', '-rn'], capture_output=True, text=True, check=True)
+                lines = result.stdout.strip().split('\n')
+                header_found = False
+                for line in lines:
+                    if not header_found:
+                        if line.lower().startswith('destination'):
+                            header_found = True
+                        continue
+                    parts = line.split()
+                    if len(parts) >= 6:
+                        routes.append(RouteInfo(destination=parts[0], gateway=parts[1], iface=parts[-1]))
+            else:
+                self.logger.warning(f"Unsupported OS for route table: {system}")
         except subprocess.CalledProcessError:
-            self.logger.warning("无法获取本地路由表")
+            self.logger.warning("Unable to get local routing table")
         except FileNotFoundError:
-            self.logger.warning("route命令不可用")
-            
+            self.logger.warning("route/netstat command not available")
         return routes
         
     async def get_bgp_info(self, prefix: str) -> List[BGPInfo]:
-        """获取BGP路由信息"""
+        """Get BGP route information"""
         bgp_info = []
         
-        # 使用多个BGP查询服务
+        # Use multiple BGP query services
         services = [
             f"https://api.bgpview.io/prefix/{prefix}",
             f"https://api.hackertarget.com/aslookup/?q={prefix}",
@@ -106,17 +109,17 @@ class RouteAnalyzer:
                         bgp_info.extend(self._parse_bgp_data(data, prefix))
                         break
             except Exception as e:
-                self.logger.debug(f"BGP查询服务 {service_url} 失败: {e}")
+                self.logger.debug(f"BGP query service {service_url} failed: {e}")
                 continue
                 
         return bgp_info
         
     def _parse_bgp_data(self, data: Dict, prefix: str) -> List[BGPInfo]:
-        """解析BGP数据"""
+        """Parse BGP data"""
         bgp_info = []
         
         try:
-            # 解析BGPView.io格式
+            # Parse BGPView.io format
             if 'data' in data and 'prefixes' in data['data']:
                 for prefix_data in data['data']['prefixes']:
                     if 'asn' in prefix_data:
@@ -132,16 +135,16 @@ class RouteAnalyzer:
                         ))
                         
         except Exception as e:
-            self.logger.error(f"解析BGP数据失败: {e}")
+            self.logger.error(f"Failed to parse BGP data: {e}")
             
         return bgp_info
         
     async def trace_route(self, destination: str, max_hops: int = 30) -> List[Dict]:
-        """执行traceroute"""
+        """Execute traceroute"""
         trace_result = []
         
         try:
-            # 使用traceroute命令
+            # Use traceroute command
             result = subprocess.run(
                 ['traceroute', '-m', str(max_hops), destination],
                 capture_output=True,
@@ -150,23 +153,23 @@ class RouteAnalyzer:
             )
             
             lines = result.stdout.strip().split('\n')
-            for line in lines[1:]:  # 跳过标题行
+            for line in lines[1:]:  # Skip header line
                 hop_info = self._parse_traceroute_line(line)
                 if hop_info:
                     trace_result.append(hop_info)
                     
         except subprocess.TimeoutExpired:
-            self.logger.warning(f"Traceroute到 {destination} 超时")
+            self.logger.warning(f"Traceroute to {destination} timed out")
         except subprocess.CalledProcessError:
-            self.logger.warning(f"Traceroute到 {destination} 失败")
+            self.logger.warning(f"Traceroute to {destination} failed")
         except FileNotFoundError:
-            self.logger.warning("traceroute命令不可用")
+            self.logger.warning("traceroute command not available")
             
         return trace_result
         
     def _parse_traceroute_line(self, line: str) -> Optional[Dict]:
-        """解析traceroute输出行"""
-        # 匹配traceroute输出格式
+        """Parse traceroute output line"""
+        # Match traceroute output format
         pattern = r'^\s*(\d+)\s+([^\s]+)\s+([\d.]+)\s+ms'
         match = re.match(pattern, line)
         
@@ -180,7 +183,7 @@ class RouteAnalyzer:
         return None
         
     async def analyze_network_path(self, destination: str) -> Dict:
-        """分析到目标地址的网络路径"""
+        """Analyze network path to destination address"""
         analysis = {
             'destination': destination,
             'timestamp': datetime.now().isoformat(),
@@ -190,22 +193,22 @@ class RouteAnalyzer:
             'summary': {}
         }
         
-        # 获取本地路由
+        # Get local routes
         analysis['local_routes'] = self.get_local_routes()
         
-        # 获取BGP信息
+        # Get BGP information
         analysis['bgp_info'] = await self.get_bgp_info(destination)
         
-        # 执行traceroute
+        # Execute traceroute
         analysis['traceroute'] = await self.trace_route(destination)
         
-        # 生成摘要
+        # Generate summary
         analysis['summary'] = self._generate_path_summary(analysis)
         
         return analysis
         
     def _generate_path_summary(self, analysis: Dict) -> Dict:
-        """生成路径分析摘要"""
+        """Generate path analysis summary"""
         summary = {
             'total_hops': len(analysis['traceroute']),
             'avg_latency': 0,
@@ -215,18 +218,18 @@ class RouteAnalyzer:
             'bottlenecks': []
         }
         
-        # 计算延迟统计
+        # Calculate latency statistics
         latencies = [hop['latency'] for hop in analysis['traceroute'] if hop['latency'] > 0]
         if latencies:
             summary['avg_latency'] = sum(latencies) / len(latencies)
             summary['max_latency'] = max(latencies)
             summary['min_latency'] = min(latencies)
             
-        # 提取AS路径
+        # Extract AS path
         if analysis['bgp_info']:
             summary['as_path'] = analysis['bgp_info'][0].as_path
             
-        # 识别瓶颈
+        # Identify bottlenecks
         for i, hop in enumerate(analysis['traceroute']):
             if hop['latency'] > summary['avg_latency'] * 2:
                 summary['bottlenecks'].append({
@@ -238,27 +241,27 @@ class RouteAnalyzer:
         return summary
         
     async def analyze_submarine_cable_routes(self, cable_endpoints: List[str]) -> Dict:
-        """分析海缆系统路由"""
+        """Analyze submarine cable routes"""
         cable_analysis = {
             'timestamp': datetime.now().isoformat(),
             'cables': {}
         }
         
         for endpoint in cable_endpoints:
-            self.logger.info(f"分析海缆端点路由: {endpoint}")
+            self.logger.info(f"Analyzing submarine cable endpoint routes: {endpoint}")
             cable_analysis['cables'][endpoint] = await self.analyze_network_path(endpoint)
             
         return cable_analysis
         
     def detect_route_changes(self, old_routes: List[RouteInfo], 
                            new_routes: List[RouteInfo]) -> List[Dict]:
-        """检测路由变化"""
+        """Detect route changes"""
         changes = []
         
         old_route_dict = {route.destination: route for route in old_routes}
         new_route_dict = {route.destination: route for route in new_routes}
         
-        # 检测新增路由
+        # Detect added routes
         for dest, new_route in new_route_dict.items():
             if dest not in old_route_dict:
                 changes.append({
@@ -267,7 +270,7 @@ class RouteAnalyzer:
                     'route': new_route
                 })
                 
-        # 检测删除的路由
+        # Detect removed routes
         for dest, old_route in old_route_dict.items():
             if dest not in new_route_dict:
                 changes.append({
@@ -276,7 +279,7 @@ class RouteAnalyzer:
                     'route': old_route
                 })
                 
-        # 检测修改的路由
+        # Detect modified routes
         for dest in old_route_dict:
             if dest in new_route_dict:
                 old_route = old_route_dict[dest]
@@ -294,7 +297,7 @@ class RouteAnalyzer:
         return changes
         
     async def get_as_info(self, asn: str) -> Optional[Dict]:
-        """获取AS信息"""
+        """Get AS information"""
         try:
             url = f"https://api.bgpview.io/asn/{asn}"
             async with self.session.get(url, timeout=10) as response:
@@ -303,34 +306,34 @@ class RouteAnalyzer:
                     if 'data' in data:
                         return data['data']
         except Exception as e:
-            self.logger.error(f"获取AS {asn} 信息失败: {e}")
+            self.logger.error(f"Failed to get AS {asn} information: {e}")
             
         return None
 
 async def main():
-    """示例用法"""
+    """Example usage"""
     async with RouteAnalyzer() as analyzer:
-        # 分析到香港的路由
+        # Analyze routes to Hong Kong
         hk_analysis = await analyzer.analyze_network_path("203.208.60.1")
         
-        print("香港路由分析结果:")
+        print("Hong Kong Route Analysis Result:")
         print(json.dumps(hk_analysis['summary'], indent=2, ensure_ascii=False))
         
-        # 分析海缆端点
+        # Analyze submarine cable endpoints
         cable_endpoints = [
-            "203.208.60.1",  # C2C香港
-            "202.12.27.1",   # EAC1香港
-            "202.12.28.1"    # NACS香港
+            "203.208.60.1",  # C2C Hong Kong
+            "202.12.27.1",   # EAC1 Hong Kong
+            "202.12.28.1"    # NACS Hong Kong
         ]
         
         cable_analysis = await analyzer.analyze_submarine_cable_routes(cable_endpoints)
         
-        print("\n海缆路由分析:")
+        print("\nSubmarine Cable Route Analysis:")
         for endpoint, analysis in cable_analysis['cables'].items():
             print(f"\n{endpoint}:")
-            print(f"  跳数: {analysis['summary']['total_hops']}")
-            print(f"  平均延迟: {analysis['summary']['avg_latency']:.1f}ms")
-            print(f"  AS路径: {' -> '.join(analysis['summary']['as_path'])}")
+            print(f"  Hops: {analysis['summary']['total_hops']}")
+            print(f"  Average Latency: {analysis['summary']['avg_latency']:.1f}ms")
+            print(f"  AS Path: {' -> '.join(analysis['summary']['as_path'])}")
 
 if __name__ == "__main__":
     asyncio.run(main()) 

@@ -206,10 +206,10 @@ async def get_dashboard():
                                     </span>
                                 </div>
                                 <div class="col-md-2">
-                                    延迟: ${item.latency.toFixed(1)}ms
+                                    Latency: ${item.latency.toFixed(1)}ms
                                 </div>
                                 <div class="col-md-2">
-                                    丢包: ${item.packet_loss.toFixed(1)}%
+                                    Packet Loss: ${item.packet_loss.toFixed(1)}%
                                 </div>
                                 <div class="col-md-2">
                                     <small class="text-muted">
@@ -276,7 +276,7 @@ async def get_dashboard():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time data推送"""
+    """WebSocket endpoint for real-time data push"""
     await manager.connect(websocket)
     try:
         while True:

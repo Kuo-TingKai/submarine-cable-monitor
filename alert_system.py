@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-告警系统
-支持多种告警方式和通知渠道
+Alert System
+Support multiple alert methods and notification channels
 """
 
 import asyncio
@@ -19,7 +19,7 @@ import sqlite3
 
 @dataclass
 class AlertRule:
-    """告警规则"""
+    """Alert rule"""
     name: str
     condition: str  # threshold, percentage, consecutive_failures
     threshold: float
@@ -29,7 +29,7 @@ class AlertRule:
 
 @dataclass
 class Alert:
-    """告警信息"""
+    """Alert information"""
     id: Optional[int]
     timestamp: datetime
     rule_name: str
@@ -42,7 +42,7 @@ class Alert:
     resolved_at: Optional[datetime] = None
 
 class AlertSystem:
-    """告警系统主类"""
+    """Main alert system class"""
     
     def __init__(self, config_file: str = "config.yaml"):
         self.config = self._load_config(config_file)
@@ -51,46 +51,46 @@ class AlertSystem:
         self._setup_alert_rules()
         
     def _load_config(self, config_file: str) -> Dict:
-        """加载配置文件"""
+        """Load configuration file"""
         try:
             with open(config_file, 'r', encoding='utf-8') as f:
                 return yaml.safe_load(f)
         except FileNotFoundError:
-            raise FileNotFoundError(f"配置文件 {config_file} 不存在")
+            raise FileNotFoundError(f"Configuration file {config_file} does not exist")
             
     def _setup_alert_rules(self):
-        """设置默认告警规则"""
+        """Set default alert rules"""
         self.alert_rules = [
             AlertRule(
-                name="高丢包率告警",
+                name="High Packet Loss Alert",
                 condition="threshold",
                 threshold=20.0,
                 target_type="all",
                 severity="MEDIUM"
             ),
             AlertRule(
-                name="完全中断告警",
+                name="Complete Outage Alert",
                 condition="threshold",
                 threshold=100.0,
                 target_type="all",
                 severity="HIGH"
             ),
             AlertRule(
-                name="海缆系统异常",
+                name="Submarine Cable System Anomaly",
                 condition="threshold",
                 threshold=10.0,
                 target_type="cable",
                 severity="HIGH"
             ),
             AlertRule(
-                name="ISP连接异常",
+                name="ISP Connection Anomaly",
                 condition="threshold",
                 threshold=15.0,
                 target_type="isp",
                 severity="MEDIUM"
             ),
             AlertRule(
-                name="云服务异常",
+                name="Cloud Service Anomaly",
                 condition="threshold",
                 threshold=25.0,
                 target_type="cloud",
@@ -99,18 +99,18 @@ class AlertSystem:
         ]
         
     def check_alert_conditions(self, status_data: Dict) -> List[Alert]:
-        """检查告警条件"""
+        """Check alert conditions"""
         alerts = []
         
         for rule in self.alert_rules:
             if not rule.enabled:
                 continue
                 
-            # 根据目标类型过滤
+            # Filter by target type
             if rule.target_type != "all" and status_data['target_type'] != rule.target_type:
                 continue
                 
-            # 检查条件
+            # Check conditions
             if rule.condition == "threshold":
                 if status_data['packet_loss'] >= rule.threshold:
                     alert = Alert(
@@ -120,7 +120,7 @@ class AlertSystem:
                         target=status_data['target'],
                         target_type=status_data['target_type'],
                         severity=rule.severity,
-                        message=f"{rule.name}: {status_data['target']} 丢包率 {status_data['packet_loss']:.1f}%",
+                        message=f"{rule.name}: {status_data['target']} packet loss {status_data['packet_loss']:.1f}%",
                         details={
                             'packet_loss': status_data['packet_loss'],
                             'latency': status_data['latency'],
@@ -132,7 +132,7 @@ class AlertSystem:
         return alerts
         
     def save_alert(self, alert: Alert) -> int:
-        """保存告警到数据库"""
+        """Save alert to database"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -156,7 +156,7 @@ class AlertSystem:
         return alert_id
         
     def resolve_alert(self, alert_id: int):
-        """解决告警"""
+        """Resolve alert"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -170,7 +170,7 @@ class AlertSystem:
         conn.close()
         
     async def send_email_alert(self, alert: Alert):
-        """发送邮件告警"""
+        """Send email alert"""
         if 'email' not in self.config['network_monitoring']:
             return
             
@@ -180,17 +180,17 @@ class AlertSystem:
             msg = MIMEMultipart()
             msg['From'] = email_config['from']
             msg['To'] = email_config['to']
-            msg['Subject'] = f"[网络监控] {alert.severity} 级别告警"
+            msg['Subject'] = f"[Network Monitoring] {alert.severity} Level Alert"
             
             body = f"""
-            告警时间: {alert.timestamp}
-            告警规则: {alert.rule_name}
-            目标地址: {alert.target}
-            目标类型: {alert.target_type}
-            严重程度: {alert.severity}
-            告警消息: {alert.message}
+            Alert Time: {alert.timestamp}
+            Alert Rule: {alert.rule_name}
+            Target Address: {alert.target}
+            Target Type: {alert.target_type}
+            Severity: {alert.severity}
+            Alert Message: {alert.message}
             
-            详细信息:
+            Details:
             {json.dumps(alert.details, indent=2, ensure_ascii=False)}
             """
             
@@ -202,13 +202,13 @@ class AlertSystem:
                 server.login(email_config['username'], email_config['password'])
                 server.send_message(msg)
                 
-            self.logger.info(f"邮件告警已发送: {alert.message}")
+            self.logger.info(f"Email alert sent: {alert.message}")
             
         except Exception as e:
-            self.logger.error(f"发送邮件告警失败: {e}")
+            self.logger.error(f"Failed to send email alert: {e}")
             
     async def send_webhook_alert(self, alert: Alert):
-        """发送Webhook告警"""
+        """Send Webhook alert"""
         if 'webhook' not in self.config['network_monitoring']:
             return
             
@@ -233,22 +233,22 @@ class AlertSystem:
                     timeout=10
                 ) as response:
                     if response.status == 200:
-                        self.logger.info(f"Webhook告警已发送: {alert.message}")
+                        self.logger.info(f"Webhook alert sent: {alert.message}")
                     else:
-                        self.logger.error(f"Webhook告警发送失败: {response.status}")
+                        self.logger.error(f"Webhook alert failed to send: {response.status}")
                         
         except Exception as e:
-            self.logger.error(f"发送Webhook告警失败: {e}")
+            self.logger.error(f"Failed to send Webhook alert: {e}")
             
     async def send_slack_alert(self, alert: Alert):
-        """发送Slack告警"""
+        """Send Slack alert"""
         if 'slack' not in self.config['network_monitoring']:
             return
             
         slack_config = self.config['network_monitoring']['slack']
         
         try:
-            # 根据严重程度选择颜色
+            # Choose color based on severity
             color_map = {
                 'LOW': '#36a64f',
                 'MEDIUM': '#ff9500',
@@ -259,31 +259,31 @@ class AlertSystem:
             payload = {
                 'attachments': [{
                     'color': color_map.get(alert.severity, '#cccccc'),
-                    'title': f"网络监控告警 - {alert.severity}",
+                    'title': f"Network Monitoring Alert - {alert.severity}",
                     'text': alert.message,
                     'fields': [
                         {
-                            'title': '目标地址',
+                            'title': 'Target Address',
                             'value': alert.target,
                             'short': True
                         },
                         {
-                            'title': '目标类型',
+                            'title': 'Target Type',
                             'value': alert.target_type,
                             'short': True
                         },
                         {
-                            'title': '告警规则',
+                            'title': 'Alert Rule',
                             'value': alert.rule_name,
                             'short': True
                         },
                         {
-                            'title': '时间',
+                            'title': 'Time',
                             'value': alert.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
                             'short': True
                         }
                     ],
-                    'footer': '网络监控系统'
+                    'footer': 'Network Monitoring System'
                 }]
             }
             
@@ -294,18 +294,18 @@ class AlertSystem:
                     timeout=10
                 ) as response:
                     if response.status == 200:
-                        self.logger.info(f"Slack告警已发送: {alert.message}")
+                        self.logger.info(f"Slack alert sent: {alert.message}")
                     else:
-                        self.logger.error(f"Slack告警发送失败: {response.status}")
+                        self.logger.error(f"Slack alert failed to send: {response.status}")
                         
         except Exception as e:
-            self.logger.error(f"发送Slack告警失败: {e}")
+            self.logger.error(f"Failed to send Slack alert: {e}")
             
     async def send_alert_notifications(self, alert: Alert):
-        """发送所有告警通知"""
+        """Send all alert notifications"""
         tasks = []
         
-        # 根据严重程度决定发送哪些通知
+        # Decide which notifications to send based on severity
         if alert.severity in ['HIGH', 'CRITICAL']:
             tasks.extend([
                 self.send_email_alert(alert),
@@ -320,11 +320,11 @@ class AlertSystem:
         else:  # LOW
             tasks.append(self.send_slack_alert(alert))
             
-        # 并行发送通知
+        # Send notifications in parallel
         await asyncio.gather(*tasks, return_exceptions=True)
         
     def get_active_alerts(self, hours: int = 24) -> List[Alert]:
-        """获取活跃告警"""
+        """Get active alerts"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -344,7 +344,7 @@ class AlertSystem:
                 timestamp=datetime.fromisoformat(row[1]),
                 rule_name=row[3],
                 target=row[2],
-                target_type='',  # 需要从details中解析
+                target_type='',  # Need to parse from details
                 severity=row[5],
                 message=row[4],
                 details=json.loads(row[6]) if row[6] else {}
@@ -355,13 +355,13 @@ class AlertSystem:
         return alerts
         
     def get_alert_statistics(self, hours: int = 24) -> Dict:
-        """获取告警统计"""
+        """Get alert statistics"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         since = datetime.now() - timedelta(hours=hours)
         
-        # 按严重程度统计
+        # Group by severity
         cursor.execute('''
             SELECT severity, COUNT(*) 
             FROM alerts 
@@ -371,7 +371,7 @@ class AlertSystem:
         
         severity_stats = dict(cursor.fetchall())
         
-        # 按目标类型统计
+        # Group by target type
         cursor.execute('''
             SELECT target_type, COUNT(*) 
             FROM alerts 
@@ -381,7 +381,7 @@ class AlertSystem:
         
         type_stats = dict(cursor.fetchall())
         
-        # 已解决的告警数量
+        # Count resolved alerts
         cursor.execute('''
             SELECT COUNT(*) 
             FROM alerts 
@@ -401,15 +401,15 @@ class AlertSystem:
         }
         
     def add_alert_rule(self, rule: AlertRule):
-        """添加告警规则"""
+        """Add alert rule"""
         self.alert_rules.append(rule)
         
     def remove_alert_rule(self, rule_name: str):
-        """删除告警规则"""
+        """Remove alert rule"""
         self.alert_rules = [rule for rule in self.alert_rules if rule.name != rule_name]
         
     def update_alert_rule(self, rule_name: str, **kwargs):
-        """更新告警规则"""
+        """Update alert rule"""
         for rule in self.alert_rules:
             if rule.name == rule_name:
                 for key, value in kwargs.items():
@@ -418,10 +418,10 @@ class AlertSystem:
                 break
 
 async def main():
-    """示例用法"""
+    """Example usage"""
     alert_system = AlertSystem()
     
-    # 模拟网络状态数据
+    # Simulate network status data
     test_status = {
         'target': '203.208.60.1',
         'target_type': 'cable',
@@ -429,21 +429,21 @@ async def main():
         'latency': 150.0
     }
     
-    # 检查告警条件
+    # Check alert conditions
     alerts = alert_system.check_alert_conditions(test_status)
     
     if alerts:
         for alert in alerts:
-            # 保存告警
+            # Save alert
             alert_id = alert_system.save_alert(alert)
-            print(f"告警已保存，ID: {alert_id}")
+            print(f"Alert saved, ID: {alert_id}")
             
-            # 发送通知
+            # Send notifications
             await alert_system.send_alert_notifications(alert)
             
-    # 获取告警统计
+    # Get alert statistics
     stats = alert_system.get_alert_statistics()
-    print("告警统计:")
+    print("Alert Statistics:")
     print(json.dumps(stats, indent=2, ensure_ascii=False))
 
 if __name__ == "__main__":
