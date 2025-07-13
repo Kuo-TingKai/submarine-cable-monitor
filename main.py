@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-网络监控系统主程序
-整合所有功能模块
+Network Monitoring System Main Program
+Integrate all functional modules
 """
 
 import asyncio
@@ -20,7 +20,7 @@ from web_dashboard import app as dashboard_app
 import uvicorn
 
 class NetworkMonitoringSystem:
-    """网络监控系统主类"""
+    """Main class for the network monitoring system"""
     
     def __init__(self, config_file: str = "config.yaml"):
         self.config_file = config_file
@@ -28,41 +28,41 @@ class NetworkMonitoringSystem:
         self.alert_system = AlertSystem(config_file)
         self.is_running = False
         
-        # 设置信号处理
+        # Set up signal handling
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
         
     def _signal_handler(self, signum, frame):
-        """信号处理器"""
-        print(f"\n收到信号 {signum}，正在停止监控系统...")
+        """Signal handler"""
+        print(f"\nReceived signal {signum}, stopping the monitoring system...")
         self.stop()
         
     async def start_monitoring(self):
-        """开始监控"""
+        """Start monitoring"""
         self.is_running = True
-        print("启动网络监控系统...")
-        print(f"监控间隔: {self.monitor.config['network_monitoring']['monitoring']['ping_interval']}秒")
+        print("Starting the network monitoring system...")
+        print(f"Monitoring interval: {self.monitor.config['network_monitoring']['monitoring']['ping_interval']} seconds")
         
         try:
             await self.monitor.start_monitoring()
         except KeyboardInterrupt:
-            print("\n用户中断，正在停止...")
+            print("\nUser interrupted, stopping...")
         finally:
             self.stop()
             
     def stop(self):
-        """停止监控"""
+        """Stop monitoring"""
         if self.is_running:
             self.is_running = False
             self.monitor.stop_monitoring()
-            print("监控系统已停止")
+            print("Monitoring system stopped")
             
     async def run_single_cycle(self):
-        """运行单次监控周期"""
-        print("运行单次监控周期...")
+        """Run a single monitoring cycle"""
+        print("Running a single monitoring cycle...")
         results = await self.monitor.run_monitoring_cycle()
         
-        # 处理告警
+        # Process alerts
         for result in results:
             alerts = self.alert_system.check_alert_conditions({
                 'target': result.target,
@@ -74,93 +74,93 @@ class NetworkMonitoringSystem:
             for alert in alerts:
                 alert_id = self.alert_system.save_alert(alert)
                 await self.alert_system.send_alert_notifications(alert)
-                print(f"告警已触发: {alert.message}")
+                print(f"Alert triggered: {alert.message}")
                 
         return results
         
     async def analyze_routes(self, targets: List[str]):
-        """分析路由"""
-        print("开始路由分析...")
+        """Analyze routes"""
+        print("Starting route analysis...")
         
         async with RouteAnalyzer() as analyzer:
             for target in targets:
-                print(f"\n分析目标: {target}")
+                print(f"\nAnalyzing target: {target}")
                 analysis = await analyzer.analyze_network_path(target)
                 
-                print(f"  跳数: {analysis['summary']['total_hops']}")
-                print(f"  平均延迟: {analysis['summary']['avg_latency']:.1f}ms")
-                print(f"  AS路径: {' -> '.join(analysis['summary']['as_path'])}")
+                print(f"  Hops: {analysis['summary']['total_hops']}")
+                print(f"  Average latency: {analysis['summary']['avg_latency']:.1f}ms")
+                print(f"  AS path: {' -> '.join(analysis['summary']['as_path'])}")
                 
                 if analysis['summary']['bottlenecks']:
-                    print("  瓶颈节点:")
+                    print("  Bottleneck nodes:")
                     for bottleneck in analysis['summary']['bottlenecks']:
-                        print(f"    跳 {bottleneck['hop']}: {bottleneck['hostname']} "
+                        print(f"    Hop {bottleneck['hop']}: {bottleneck['hostname']} "
                               f"({bottleneck['latency']:.1f}ms)")
                           
     def show_status(self):
-        """显示状态摘要"""
+        """Display status summary"""
         summary = self.monitor.get_status_summary()
         alerts = self.alert_system.get_active_alerts()
         
-        print("\n=== 网络状态摘要 ===")
+        print("\n=== Network Status Summary ===")
         for target_type, counts in summary.items():
             print(f"\n{target_type.upper()}:")
-            print(f"  正常运行: {counts['operational']}")
-            print(f"  性能下降: {counts['degraded']}")
-            print(f"  完全中断: {counts['down']}")
+            print(f"  Operational: {counts['operational']}")
+            print(f"  Degraded: {counts['degraded']}")
+            print(f"  Down: {counts['down']}")
             
-        print(f"\n活跃告警: {len(alerts)}")
-        for alert in alerts[:5]:  # 显示前5个告警
+        print(f"\nActive alerts: {len(alerts)}")
+        for alert in alerts[:5]:  # Display first 5 alerts
             print(f"  - {alert.message}")
             
     def show_statistics(self, hours: int = 24):
-        """显示统计信息"""
+        """Display statistics"""
         stats = self.alert_system.get_alert_statistics(hours)
         
-        print(f"\n=== 告警统计 (最近{hours}小时) ===")
-        print(f"总告警数: {stats['total_alerts']}")
-        print(f"已解决: {stats['resolved_alerts']}")
-        print(f"活跃告警: {stats['active_alerts']}")
+        print(f"\n=== Alert Statistics (last {hours} hours) ===")
+        print(f"Total alerts: {stats['total_alerts']}")
+        print(f"Resolved: {stats['resolved_alerts']}")
+        print(f"Active alerts: {stats['active_alerts']}")
         
-        print("\n按严重程度分布:")
+        print("\nSeverity distribution:")
         for severity, count in stats['severity_distribution'].items():
             print(f"  {severity}: {count}")
             
-        print("\n按类型分布:")
+        print("\nType distribution:")
         for target_type, count in stats['type_distribution'].items():
             print(f"  {target_type}: {count}")
             
     async def start_dashboard(self, host: str = "0.0.0.0", port: int = 8000):
-        """启动Web仪表板"""
-        print(f"启动Web仪表板: http://{host}:{port}")
+        """Start Web dashboard"""
+        print(f"Starting Web dashboard: http://{host}:{port}")
         config = uvicorn.Config(dashboard_app, host=host, port=port)
         server = uvicorn.Server(config)
         await server.serve()
 
 def main():
-    """主函数"""
-    parser = argparse.ArgumentParser(description="网络监控系统")
+    """Main function"""
+    parser = argparse.ArgumentParser(description="Network monitoring system")
     parser.add_argument("--config", "-c", default="config.yaml", 
-                       help="配置文件路径")
+                       help="Configuration file path")
     parser.add_argument("--mode", "-m", choices=["monitor", "single", "analyze", 
                                                 "status", "stats", "dashboard"],
-                       default="monitor", help="运行模式")
+                       default="monitor", help="Run mode")
     parser.add_argument("--targets", "-t", nargs="+", 
-                       help="分析目标地址列表")
+                       help="List of target addresses for analysis")
     parser.add_argument("--hours", type=int, default=24,
-                       help="统计时间范围(小时)")
+                       help="Statistical time range (hours)")
     parser.add_argument("--host", default="0.0.0.0",
-                       help="Web仪表板主机地址")
+                       help="Web dashboard host address")
     parser.add_argument("--port", type=int, default=8000,
-                       help="Web仪表板端口")
+                       help="Web dashboard port")
     
     args = parser.parse_args()
     
-    # 创建监控系统
+    # Create monitoring system
     system = NetworkMonitoringSystem(args.config)
     
     async def run():
-        """运行主程序"""
+        """Run main program"""
         try:
             if args.mode == "monitor":
                 await system.start_monitoring()
@@ -168,7 +168,7 @@ def main():
                 await system.run_single_cycle()
             elif args.mode == "analyze":
                 if not args.targets:
-                    print("错误: 分析模式需要指定目标地址")
+                    print("Error: Target addresses are required for analysis mode")
                     sys.exit(1)
                 await system.analyze_routes(args.targets)
             elif args.mode == "status":
@@ -178,10 +178,10 @@ def main():
             elif args.mode == "dashboard":
                 await system.start_dashboard(args.host, args.port)
         except Exception as e:
-            print(f"错误: {e}")
+            print(f"Error: {e}")
             sys.exit(1)
             
-    # 运行程序
+    # Run program
     asyncio.run(run())
 
 if __name__ == "__main__":
