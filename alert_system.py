@@ -9,6 +9,7 @@ import asyncio
 import smtplib
 import json
 import logging
+import yaml
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from dataclasses import dataclass

@@ -7,6 +7,7 @@ Demonstrate how to use various features
 
 import asyncio
 import json
+import yaml
 from datetime import datetime
 from network_monitor import NetworkMonitor
 from route_analyzer import RouteAnalyzer
@@ -71,6 +72,8 @@ async def demo_route_analysis():
                               
             except Exception as e:
                 print(f"  Analysis failed: {e}")
+                print(f"  Note: This may be due to network restrictions or firewall settings")
+                print(f"  Traceroute and BGP queries may be blocked in some environments")
 
 async def demo_alert_system():
     """Demonstrate alert system functionality"""
